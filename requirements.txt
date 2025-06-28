@@ -1,0 +1,25 @@
+# Core Python libraries
+pandas
+numpy
+scikit-learn
+jupyter
+notebook
+
+# API
+fastapi
+uvicorn
+pydantic
+
+# MLOps
+mlflow
+cml
+
+# Testing
+pytest
+
+# For Docker
+python-dotenv
+
+# Visualization
+matplotlib
+seaborn 
