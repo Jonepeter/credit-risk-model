@@ -8,7 +8,7 @@ Bati Bank is partnering with an eCommerce company to enable a buy-now-pay-later 
 
 ### Basel II Accord and the Need for Interpretability
 
-The Basel II Capital Accord places strong emphasis on the measurement, management, and disclosure of credit risk. It requires financial institutions to use risk-sensitive approaches for capital adequacy, and to demonstrate that their credit risk models are robust, transparent, and well-documented. This regulatory environment means that our credit scoring model must not only be accurate, but also interpretable and auditable. Stakeholders—including regulators, auditors, and internal risk managers must be able to understand how the model arrives at its predictions, justify its use, and explain its decisions to customers if needed. As a result, model documentation, feature engineering transparency, and clear reasoning behind predictions are essential for compliance and trust.
+The Basel II Capital Accord places strong emphasis on the measurement, management, and disclosure of credit risk. It requires financial institutions to use risk-sensitive approaches for capital adequacy, and to demonstrate that their credit risk models are robust, transparent, and well-documented. This regulatory environment means that our credit scoring model must not only be accurate, but also interpretable and auditable. Stakeholders including regulators, auditors, and internal risk managers must be able to understand how the model arrives at its predictions, justify its use, and explain its decisions to customers if needed. As a result, model documentation, feature engineering transparency, and clear reasoning behind predictions are essential for compliance and trust.
 
 ### Proxy Variables for Default and Associated Risks
 
