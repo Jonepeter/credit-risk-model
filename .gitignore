@@ -65,3 +65,5 @@ coverage.xml
 
 # VS Code
 .vscode/ 
+
+mlruns/
