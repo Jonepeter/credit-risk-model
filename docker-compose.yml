@@ -1,9 +1,11 @@
-version: '3.8' 
+version: '3.8'
 services:
-  app:
+  api:
     build: .
+    container_name: credit-risk-api
     ports:
       - "8000:8000"
+    restart: unless-stopped
     volumes:
       - .:/app
     environment:
