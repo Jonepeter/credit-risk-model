@@ -42,7 +42,7 @@ This regulatory environment makes interpretability non-negotiable. While complex
 | **Implementation**   | Easy - Fast scoring, simple monitoring        | Hard - Computational intensive            |
 | **Maintenance**      | Low - Stable relationships                    | High - Needs frequent retraining          |
 
-The choice is depends on the regulatory context, the need for transparency, and the business’s risk appetite. Often, a balance is sought: starting with interpretable models for baseline compliance, and carefully introducing complexity only when it demonstrably improves business outcomes and can be sufficiently explained.
+The choice is depends on the regulatory context, the need for transparency, and the business's risk appetite. Often, a balance is sought: starting with interpretable models for baseline compliance, and carefully introducing complexity only when it demonstrably improves business outcomes and can be sufficiently explained.
 
 ## Project Structure
 
@@ -71,3 +71,135 @@ credit-risk-model/
 ├── .gitignore
 └── README.md
 ```
+
+---
+
+## Feature Engineering
+
+Feature engineering is performed in `src/data_processing.py` and the associated Jupyter notebooks. Key steps include:
+- **Time-based features:** Extracts hour, day, month, year, and day-of-week from transaction timestamps.
+- **Aggregates:** Computes total, average, and standard deviation of transaction amounts and values per customer.
+- **Categorical encoding:** Counts unique values and finds the most frequent (mode) for each categorical feature per customer.
+- **RFM features:** Calculates Recency, Frequency, and Monetary value for each customer.
+- **WOE/IV selection:** Uses Weight of Evidence and Information Value to select the most predictive features.
+
+You can experiment with feature engineering in the provided notebooks, or use the pipeline in `src/data_processing.py` for production-ready transformations.
+
+---
+
+## Model Training
+
+Model training is handled by `src/train.py`. Supported models include:
+- Logistic Regression (with or without WoE features)
+- Random Forest
+- Gradient Boosting
+- XGBoost
+- LightGBM
+
+To train a model, run:
+```bash
+python src/train.py
+```
+This will split the data, perform hyperparameter tuning, evaluate models, and save the best model artifact to the `model/` directory.
+
+---
+
+## Model Artifacts
+
+- Trained models are saved in the `model/` directory (e.g., `model/best_model.pkl`).
+- The pipeline and transformers are saved as `.pkl` files for reuse in prediction and API serving.
+- You can load a model in Python with:
+  ```python
+  import joblib
+  model = joblib.load('model/best_model.pkl')
+  ```
+
+---
+
+## Manual Testing
+
+### **Manual API Testing**
+
+You can test the FastAPI endpoints manually using `curl` or `httpie`:
+
+- **Root endpoint:**
+  ```bash
+  curl http://localhost:8000/
+  ```
+- **Prediction endpoint:**
+  ```bash
+  http POST http://localhost:8000/predict transactions:='[{"CustomerId": 1, "TransactionId": 101, ...}]'
+  ```
+  (Replace the JSON with your test data.)
+
+Or use the interactive docs at [http://localhost:8000/docs](http://localhost:8000/docs).
+
+### **Manual Pipeline Testing**
+
+You can test the feature engineering and prediction pipeline in a notebook or script:
+
+```python
+from src.data_processing import get_full_preprocessing_pipeline
+import pandas as pd
+raw_df = pd.read_csv('data/raw/your_data.csv')
+pipeline = get_full_preprocessing_pipeline()
+processed = pipeline.fit_transform(raw_df)
+```
+
+---
+
+## Running the Service with Docker
+
+You can build and run the FastAPI service using Docker or docker-compose.
+
+### **Build and Run with Docker Compose**
+
+```bash
+docker-compose up --build
+```
+- The API will be available at [http://localhost:8000](http://localhost:8000)
+- To stop the service:
+```bash
+docker-compose down
+```
+
+### **Build and Run with Docker (manual)**
+
+```bash
+docker build -t credit-risk-api .
+docker run -p 8000:8000 credit-risk-api
+```
+
+---
+
+## Running Tests and Linting Locally
+
+- **Run all unit tests:**
+  ```bash
+  pytest
+  ```
+- **Run code linter (flake8):**
+  ```bash
+  flake8 src/ --max-line-length=120 --exclude=__init__.py
+  ```
+
+---
+
+## CI/CD with GitHub Actions
+
+- Automated CI runs on every push and pull request to the `main` branch.
+- The workflow performs:
+  1. **Linting** with flake8 (code style must pass)
+  2. **Unit testing** with pytest (all tests must pass)
+- The build fails if either step fails.
+
+---
+
+## API Usage
+
+Once running, access the API docs at [http://localhost:8000/docs](http://localhost:8000/docs)
+
+- **Root endpoint:** `GET /` returns a welcome message.
+- **Prediction endpoint:** `POST /predict` accepts a batch of transactions and returns risk predictions.
+
+See `src/api/main.py` and `src/api/pydantic_models.py` for request/response formats.
