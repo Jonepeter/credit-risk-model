@@ -605,8 +605,6 @@ def detect_outliers(df, numerical_features=None, outlier_threshold=1.5):
         if rows == 1:
             axes = axes.reshape(1, -1)
         
-        outlier_summary = {}
-        
         for idx, feature in enumerate(numerical_features):
             try:
                 row = idx // cols
@@ -635,36 +633,50 @@ def detect_outliers(df, numerical_features=None, outlier_threshold=1.5):
         plt.tight_layout()
         plt.show()
         
-        # Print outlier summary
-        print("\n📊 OUTLIER SUMMARY:")
-        print("-" * 40)
-        for feature, stats in outlier_summary.items():
-            if stats['count'] > 0:
-                print(f"🔴 {feature}:")
-                print(f"   • Outliers: {stats['count']} ({stats['percentage']:.1f}%)")
-                print(f"   • Range: [{stats['lower_bound']:.2f}, {stats['upper_bound']:.2f}]")
-            else:
-                print(f"✅ {feature}: No outliers detected")
-        
-        # Recommendations
-        print("\n💡 OUTLIER HANDLING RECOMMENDATIONS:")
-        print("-" * 40)
-        high_outlier_features = [f for f, stats in outlier_summary.items() if stats['percentage'] > 5]
-        
-        if high_outlier_features:
-            print("  • Features with >5% outliers detected:")
-            for feature in high_outlier_features:
-                print(f"    - {feature}: {outlier_summary[feature]['percentage']:.1f}% outliers")
-            print("  • Consider: Winsorization, log transformation, or robust scaling")
-            print("  • Evaluate if outliers represent valid extreme values or errors")
-        else:
-            print("  • No features with excessive outliers (>5%)")
-            print("  • Standard scaling should be sufficient for most features")
-        
-        return outlier_summary
+        summary = []
+        for col in numerical_features:
+            Q1 = df[col].quantile(0.25)
+            Q3 = df[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower = Q1 - 1.5 * IQR
+            upper = Q3 + 1.5 * IQR
+            outliers = df[(df[col] < lower) | (df[col] > upper)][col]
+            count = outliers.count()
+            percent = 100 * count / len(df) if len(df) > 0 else 0
+            summary.append({
+                'feature': col,
+                'outlier_count': count,
+                'outlier_percent': percent
+            })
+        outlier_summary_df = pd.DataFrame(summary)
+        print(" -------- Outlier Summary: --------- ")
+        print(outlier_summary_df.to_string(index=False))
         
     except Exception as e:
         print(f"❌ Error in outlier detection: {str(e)}")
         return {}
 
-
+    """
+    Detects outliers in numerical columns using the IQR method and prints a summary.
+    Args:
+        df (pd.DataFrame): Input DataFrame
+    """
+    num_cols = df.select_dtypes(include=['number']).columns
+    summary = []
+    for col in num_cols:
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3 - Q1
+        lower = Q1 - 1.5 * IQR
+        upper = Q3 + 1.5 * IQR
+        outliers = df[(df[col] < lower) | (df[col] > upper)][col]
+        count = outliers.count()
+        percent = 100 * count / len(df) if len(df) > 0 else 0
+        summary.append({
+            'feature': col,
+            'outlier_count': count,
+            'outlier_percent': percent
+        })
+    summary_df = pd.DataFrame(summary)
+    print("Outlier Summary:")
+    print(summary_df.to_string(index=False))
