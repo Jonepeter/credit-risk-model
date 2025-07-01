@@ -8,6 +8,9 @@ from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.cluster import KMeans
 from datetime import datetime
+import scorecardpy as sc
+import warnings
+warnings.filterwarnings('ignore')
 
 class FeatureEngineer(BaseEstimator, TransformerMixin):
     """
@@ -177,9 +180,70 @@ class RFMClusterer(BaseEstimator, TransformerMixin):
             print(f"Error in RFMClusterer.transform: {e}")
             return None
 
+class WOEIVSelector(BaseEstimator, TransformerMixin):
+    """
+    Custom transformer to apply WOE binning and select features based on IV using scorecardpy.
+    Only features with IV > 0.02 are retained. WOE transformation is applied to those features.
+    """
+    def __init__(self, exclude_cols=None, iv_threshold=0.02):
+        self.exclude_cols = exclude_cols if exclude_cols is not None else ['CustomerId', 'is_high_risk']
+        self.iv_threshold = iv_threshold
+        self.bins = None
+        self.selected_features = None
+
+    def fit(self, X, y=None):
+        """
+        Fit WOE binning and select features based on IV.
+        Args:
+            X (pd.DataFrame): Input data.
+            y (array-like): Target variable (binary).
+        Returns:
+            self
+        """
+        try:
+            if y is not None:
+                X = X.copy()
+                X['y'] = y
+            else:
+                if 'is_high_risk' in X.columns:
+                    X = X.rename(columns={'is_high_risk': 'y'})
+                else:
+                    raise ValueError('Target variable y or is_high_risk must be provided.')
+            features = [col for col in X.columns if col not in self.exclude_cols and col != 'y']
+            self.bins = sc.woebin(X, y='y', x=features)
+            iv_summary = {var: self.bins[var]['total_iv'].values[0] for var in self.bins}
+            self.selected_features = [var for var, iv in iv_summary.items() if iv > self.iv_threshold]
+            return self
+        except Exception as e:
+            print(f"Error in WOEIVSelector.fit: {e}")
+            self.selected_features = []
+            return self
+
+    def transform(self, X):
+        """
+        Apply WOE transformation and select features with IV > threshold.
+        Args:
+            X (pd.DataFrame): Input data.
+        Returns:
+            pd.DataFrame: WOE-transformed and IV-selected features.
+        """
+        try:
+            if self.bins is None or self.selected_features is None:
+                raise RuntimeError('WOEIVSelector must be fitted before calling transform.')
+            X_woe = sc.woebin_ply(X, self.bins)
+            # Only keep selected features (WOE columns)
+            selected_woe_cols = [f'{col}_woe' for col in self.selected_features if f'{col}_woe' in X_woe.columns]
+            # Add back CustomerId for reference if present
+            if 'CustomerId' in X_woe.columns:
+                selected_woe_cols = ['CustomerId'] + selected_woe_cols
+            return X_woe[selected_woe_cols]
+        except Exception as e:
+            print(f"Error in WOEIVSelector.transform: {e}")
+            return None
+
 def get_full_preprocessing_pipeline(snapshot_date=None):
     """
-    Returns a scikit-learn Pipeline for end-to-end data preprocessing, including feature engineering, RFM clustering, and preprocessing.
+    Returns a scikit-learn Pipeline for end-to-end data preprocessing, including feature engineering, WOE/IV selection, RFM clustering, and preprocessing.
     Args:
         snapshot_date (str or datetime, optional): Date for Recency calculation.
     Returns:
@@ -223,7 +287,8 @@ def get_full_preprocessing_pipeline(snapshot_date=None):
         full_pipeline = Pipeline(steps=[
             ('feature_engineer', FeatureEngineer()),
             ('rfm_clusterer', RFMClusterer(snapshot_date=snapshot_date)),
-            ('preprocessor', preprocessor)
+            ('preprocessor', preprocessor),
+            ('woe_iv_selector', WOEIVSelector())
         ])
         return full_pipeline
     except Exception as e:
@@ -263,12 +328,47 @@ def save_processed_data(df, file_path):
     except Exception as e:
         print(f"Error saving processed data: {e}")
 
-def main():
+def woe_iv_select_transform(df, target_col='is_high_risk', exclude_cols=None, iv_threshold=0.02):
+    """
+    Apply WOE binning and select features based on IV using scorecardpy.
+    Returns a DataFrame with WOE-transformed values for features with IV > threshold.
+
+    Args:
+        df (pd.DataFrame): Input data.
+        target_col (str): Name of the binary target column.
+        exclude_cols (list): Columns to exclude from WOE/IV selection.
+        iv_threshold (float): Minimum IV for feature selection.
+    Returns:
+        pd.DataFrame: WOE-transformed DataFrame with selected features.
+    """
+
+    try:
+        if exclude_cols is None:
+            exclude_cols = ['CustomerId', target_col]
+        df_woe = df.rename(columns={target_col: 'y'})
+        features = [col for col in df_woe.columns if col not in exclude_cols and col != 'y']
+        bins = sc.woebin(df_woe, y='y', x=features)
+        iv_summary = {var: bins[var]['total_iv'].values[0] for var in bins}
+        selected_features = [var for var, iv in iv_summary.items() if iv > iv_threshold]
+        df_woe_transformed = sc.woebin_ply(df_woe, bins)
+        selected_woe_cols = [f'{col}_woe' for col in selected_features if f'{col}_woe' in df_woe_transformed.columns]
+        if 'CustomerId' in df_woe_transformed.columns:
+            selected_woe_cols = ['CustomerId'] + selected_woe_cols
+        return df_woe_transformed[selected_woe_cols]
+    except Exception as e:
+        print(f"Error in woe_iv_select_transform: {e}")
+        return None
+
+def main(dataset = None):
     
     # Load raw data
-    raw_df = load_data('../data/raw/data.csv')
-    raw_df['TransactionStartTime'] = pd.to_datetime(raw_df['TransactionStartTime']).dt.strftime("%Y-%m-%d %H:%M:%S")
+    raw_df = dataset
+    if raw_df is None:
+        raw_df = load_data('../data/raw/data.csv')
+
+        # raw_df['TransactionStartTime'] = pd.to_datetime(raw_df['TransactionStartTime']).dt.strftime("%Y-%m-%d %H:%M:%S")
     if raw_df is not None:
+        raw_df['TransactionStartTime'] = pd.to_datetime(raw_df['TransactionStartTime']).dt.strftime("%Y-%m-%d %H:%M:%S")
         print("\n--- Running the full preprocessing pipeline including RFM and High-Risk Labeling ---")
         # Define a snapshot date for RFM calculation. Use a date after the latest transaction in dummy data.
         # Latest transaction in dummy data is 2024-06-29. Let's use 2024-07-01.
@@ -371,8 +471,9 @@ def main():
             print("\nFirst 5 rows of fully processed (model-ready) data with target:")
             print(processed_features_df.head())
             print(f"Fully processed data shape (with target): {processed_features_df.shape}")
-
-            save_processed_data(processed_features_df, '../data/processed/Preprocessed_data.csv')
+            final_data = woe_iv_select_transform(processed_features_df)
+            save_processed_data(final_data, '../data/processed/Preprocessed_data.csv')
+            return final_data  
 
         except Exception as e:
             print(f"Could not reconstruct DataFrame with column names after full preprocessing: {e}")
